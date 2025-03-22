@@ -2,6 +2,8 @@ package com.formeasy.service;
 
 import org.springframework.stereotype.Service;
 
+import com.formeasy.security.AuthSession;
+
 import jakarta.mail.Authenticator;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -18,11 +20,7 @@ import java.io.IOException;
 import java.util.*;
 
 @Service
-public class EmailService {
-	
-	private final String username = "viniciusalves081105@gmail.com";
-	private final String password = "gorz rvwu nyzg tdog"; 
-	
+public class EmailService {	
 	
     // Método para validar se um e-mail tem um formato válido
     public boolean isValidEmail(String email) {
@@ -40,7 +38,22 @@ public class EmailService {
 
     // Método para enviar e-mails
     public void sendEmails(List<String> recipients, String assunto, String descricao) throws MessagingException {
-    	    Set<String> uniqueRecipients = new HashSet<>(recipients); // Remove duplicatas
+    	
+    		if (!AuthSession.isAuthenticated()) {
+    			throw new MessagingException("Usuário não autenticado. Faça login antes de enviar e-mails.");
+    		}    
+    		
+    		String userLogin = AuthSession.getUserLogin();
+            String accessToken = AuthSession.getToken();  // Token de acesso ao Google
+            
+            System.out.println("E-mail armazenado na sessão: " + userLogin);
+            System.out.println("Token atual: " + accessToken);
+            
+            if (userLogin == null || accessToken == null) {
+                throw new MessagingException("Credenciais do usuário não encontradas.");
+            }
+    	
+    		Set<String> uniqueRecipients = new HashSet<>(recipients); // Remove duplicatas
 
     	    Properties props = new Properties();
     	    props.put("mail.smtp.auth", "true");
@@ -51,7 +64,7 @@ public class EmailService {
     	    Session session = Session.getDefaultInstance(props, new Authenticator() {
     	        @Override
     	        protected PasswordAuthentication getPasswordAuthentication() {
-    	            return new PasswordAuthentication(username, password);
+    	            return new PasswordAuthentication(userLogin, accessToken);
     	        }
     	    });
 
@@ -59,7 +72,7 @@ public class EmailService {
     	        if (isValidEmail(recipient)) { // Verifica se o e-mail é válido
     	            try {
     	                Message msg = new MimeMessage(session);
-    	                msg.setFrom(new InternetAddress(username)); // A linha que estava dando erro era essa (ERROR: NULL POINTER EXCEPTION)
+    	                msg.setFrom(new InternetAddress(userLogin));
     	                msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(recipient));
     	                msg.setSubject(assunto);
     	                msg.setText(descricao);

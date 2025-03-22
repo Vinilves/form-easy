@@ -1,23 +1,35 @@
 package com.formeasy.controller;
 
 import java.io.IOException;
-
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 
 import org.controlsfx.control.Notifications;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import com.formeasy.domain.AuthenticationDTO;
+import com.formeasy.domain.LoginResponseDTO;
+import com.formeasy.security.AuthSession;
+import com.formeasy.security.TokenService;
 
 import com.google.api.services.people.v1.PeopleServiceScopes;
 import com.google.api.services.sheets.v4.SheetsScopes;
+
 
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -30,18 +42,29 @@ import net.rgielen.fxweaver.core.FxmlView;
 
 @Component
 @FxmlView("LoginView.fxml")
-
-// Nova notação Service
-@Service
 public class LoginController{
 	RedirectController redirect = new RedirectController();
+
+    @Autowired
+    private TokenService tokenService;
 	
 	@FXML
 	private Button btnLogin;
 	 
     @FXML
-    private Button btnLoginGoogle;   
-    	
+    private Button btnLoginGoogle; 
+    
+    @FXML
+    private TextField txtLogin;
+    
+    @FXML
+    private PasswordField txtPassword;
+    
+    @FXML
+    public void initialize() {
+      
+    }
+
     
     @FXML
     void onClickLogin(ActionEvent event) throws IOException {
@@ -49,22 +72,48 @@ public class LoginController{
     	// O path funcionou somente com "WelcomeView.fxml"
     	// Este método ficará assim apenas para fins de teste.
     	
-    	String title = "Menu";
-    	String path = "WelcomeView.fxml";
-    	redirect.loadNewStage(title, path);
-    	redirect.closeCurrentStage(btnLogin);
-    }
-    
+    	String login = txtLogin.getText().trim();
+    	String password = txtPassword.getText().trim();
+    	
+    	 if (login.isEmpty() || password.isEmpty()) {
+             showNotification("Erro", "Por favor, preencha todos os campos.", false);
+             return;
+         }
+    	 
+    	// Dados para autenticação
+         AuthenticationDTO authDTO = new AuthenticationDTO(login, password);
+    	 
+    	 try {
+    		// Faz a requisição HTTP para o AuthController
+             ResponseEntity<LoginResponseDTO> response = fazerRequisicaoLogin(authDTO);
+
+             if (response.getStatusCode() == HttpStatus.OK) {
+                 // Login bem-sucedido
+                 String token = response.getBody().token();
+                 
+                 // Inicia a sessão, buscando as credenciais que o usuário já registrou (entrada rápida)
+                 AuthSession.setToken(token);
+                 AuthSession.setUserLogin(txtLogin.getText());
+                 AuthSession.setUserPassword(txtPassword.getText());                 
+
+                 // Redireciona para a próxima tela
+                 redirect.loadNewStage("Menu", "WelcomeView.fxml");
+                 redirect.closeCurrentStage(btnLogin);
+             } else {
+                 // Exibe mensagem de erro
+                 showNotification("Erro", "Login ou senha incorretos.", false);
+             }
+         } catch (Exception e) {
+             showNotification("Erro", "Ocorreu um erro ao tentar fazer login.", false);
+             e.printStackTrace();
+         }
+    	 
+    }   
+
     @FXML
     void onClickLoginGoogle(ActionEvent event) throws IOException, URISyntaxException{
     	System.out.println("Botão clicado!");    	
     	openSuperimposedLoginView("http://localhost:8080/attributesuser"); 	
-    }
-    
-    @FXML
-    public void initialize() {
-    	
-	   
     }
     
     private void openSuperimposedLoginView(String url) {
@@ -111,38 +160,105 @@ public class LoginController{
         		System.out.println("Código de autorização: " + authCode);        		
         		stage.close();
         		
-        		try {
+        		try {        	
+        			//Faz a requisição HTTP para o AuthController capturando o código de autorização (authCode) retornado pelo Google.
+                    ResponseEntity<LoginResponseDTO> response = fazerRequisicaoRegistroGoogle(authCode);
 
-					redirect.loadNewStage("Menu", "WelcomeView.fxml");
-					redirect.closeCurrentStage(btnLogin);
-				} catch (IOException e) {					
-					e.printStackTrace();
-				}
-    		} else {
-    			showNotification("Erro", "Nenhum código encontrado ainda...", false);
-    		} 
-    		
-    	});
+                    if (response.getStatusCode() == HttpStatus.OK) {
+                        // Registro e autenticação bem-sucedidos
+                        String token = response.getBody().token();
+                        String userLogin = response.getBody().login();
+                        
+                        // Inicia a sessão buscando as credenciais no AuthSession
+                        AuthSession.setToken(token);
+                        AuthSession.setUserLogin(userLogin);                                       
+
+                        // Redireciona para a próxima tela
+                        redirect.loadNewStage("Menu", "WelcomeView.fxml");
+                        redirect.closeCurrentStage(btnLogin);
+                    } else {
+                        showNotification("Erro", "Falha na autenticação com o Google.", false);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    showNotification("Erro", "Falha na autenticação com o Google.", false);
+                }
+            } else {
+                System.out.println("Erro, Nenhum código encontrado ainda...");
+            }
+        });
     }
-    	public void showNotification(String titulo, String mensagem, boolean sucesso) {
-            
-        	String imagePath = sucesso ? "/images/sucess.png" : "/images/error.png";
+    
+    //Envia requisições HTTP para o backend para autenticação
+    private ResponseEntity<LoginResponseDTO> fazerRequisicaoLogin(AuthenticationDTO authDTO) {
+        // Configuração do cliente HTTP
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
-            // Carregar imagens
-            Image image = new Image(getClass().getResource(imagePath).toExternalForm());
+        // Corpo da requisição
+        HttpEntity<AuthenticationDTO> request = new HttpEntity<>(authDTO, headers);
+        
+        ResponseEntity<LoginResponseDTO> response = restTemplate.postForEntity("http://localhost:8080/auth/login", request, LoginResponseDTO.class);
+        
+        if (response.getStatusCode() == HttpStatus.OK) {
+            LoginResponseDTO loginData = response.getBody();
+            System.out.println("Token: " + loginData.token());
+            System.out.println("Login: " + loginData.login());
+            System.out.println("Senha: " +loginData.password());
             
-            ImageView imageViewStatus = new ImageView(image);
-            imageViewStatus.setFitWidth(50);
-            imageViewStatus.setFitHeight(50);
+        }
 
-            // Criar e exibir a notificação
-            Notifications.create()
-                .title(titulo)
-                .text(mensagem)
-                .graphic(imageViewStatus) 
-                .position(Pos.BASELINE_RIGHT)  // Posição no canto inferior direito da tela
-                .hideAfter(Duration.seconds(5))  // Duração da notificação
-                .show();
+        return response;
+    }
+    
+    //Envia requisições HTTP para o backend para registro.
+    private ResponseEntity<LoginResponseDTO> fazerRequisicaoRegistroGoogle(String authCode) {
+        // Configuração do cliente HTTP
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        // Corpo da requisição (envia o authCode como uma string)
+        HttpEntity<String> request = new HttpEntity<>(authCode, headers);
+
+        ResponseEntity<LoginResponseDTO> response = restTemplate.postForEntity("http://localhost:8080/auth/registro", request, LoginResponseDTO.class);
+
+        if (response.getStatusCode() == HttpStatus.OK) {
+            LoginResponseDTO loginData = response.getBody();
+            System.out.println("Token gerado: " + loginData.token());
+            System.out.println("Login recebido: " + loginData.login());
+            System.out.println("Senha recebida: " + loginData.password());
+        }
+
+        return response;
+    }
+    
+    public void showNotification(String titulo, String mensagem, boolean sucesso) {
+            
+       String imagePath = sucesso ? "/images/sucess.png" : "/images/error.png";
+
+       // Carregar imagens
+       Image image = new Image(getClass().getResource(imagePath).toExternalForm());
+       
+       ImageView imageViewStatus = new ImageView(image);
+       if (sucesso) {
+           imageViewStatus.setFitWidth(50);  // Tamanho para imagem de sucesso
+           imageViewStatus.setFitHeight(50);
+       } else {
+           imageViewStatus.setFitWidth(80);  // Tamanho para imagem de erro
+           imageViewStatus.setFitHeight(80);
+       }
+       imageViewStatus.setPreserveRatio(true); 
+
+       // Criar e exibir a notificação
+       Notifications.create()
+             .title(titulo)
+             .text(mensagem)
+             .graphic(imageViewStatus) 
+             .position(Pos.BASELINE_RIGHT)  // Posição no canto inferior direito da tela
+             .hideAfter(Duration.seconds(5))  // Duração da notificação
+             .show();
         }
     
 }

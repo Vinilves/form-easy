@@ -25,12 +25,12 @@
             </DropShadow>
          </effect>
       </Pane>
-      <TextField layoutX="300.0" layoutY="230.0" prefHeight="52.0" prefWidth="212.0" promptText="Email" AnchorPane.bottomAnchor="318.0" AnchorPane.leftAnchor="300.0" AnchorPane.rightAnchor="288.0">
+      <TextField fx:id="txtLogin" layoutX="300.0" layoutY="230.0" prefHeight="52.0" prefWidth="212.0" promptText="Email" AnchorPane.bottomAnchor="318.0" AnchorPane.leftAnchor="300.0" AnchorPane.rightAnchor="288.0">
          <font>
             <Font size="18.0" />
          </font>
       </TextField>
-      <PasswordField layoutX="300.0" layoutY="290.0" prefHeight="52.0" prefWidth="212.0" promptText="Senha" AnchorPane.bottomAnchor="258.0" AnchorPane.leftAnchor="300.0" AnchorPane.rightAnchor="288.0">
+      <PasswordField fx:id="txtPassword" layoutX="300.0" layoutY="290.0" prefHeight="52.0" prefWidth="212.0" promptText="Senha" AnchorPane.bottomAnchor="258.0" AnchorPane.leftAnchor="300.0" AnchorPane.rightAnchor="288.0">
          <font>
             <Font size="18.0" />
          </font>

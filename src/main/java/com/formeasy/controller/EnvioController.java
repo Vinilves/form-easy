@@ -188,23 +188,29 @@ public class EnvioController {
 
     public void showNotification(String titulo, String mensagem, boolean sucesso) {
         
-    	String imagePath = sucesso ? "/images/sucess.png" : "/images/error.png";
+        String imagePath = sucesso ? "/images/sucess.png" : "/images/error.png";
 
         // Carregar imagens
         Image image = new Image(getClass().getResource(imagePath).toExternalForm());
         
         ImageView imageViewStatus = new ImageView(image);
-        imageViewStatus.setFitWidth(50);
-        imageViewStatus.setFitHeight(50);
+        if (sucesso) {
+            imageViewStatus.setFitWidth(50);  // Tamanho para imagem de sucesso
+            imageViewStatus.setFitHeight(50);
+        } else {
+            imageViewStatus.setFitWidth(80);  // Tamanho para imagem de erro
+            imageViewStatus.setFitHeight(80);
+        }
+        imageViewStatus.setPreserveRatio(true); 
 
         // Criar e exibir a notificação
         Notifications.create()
-            .title(titulo)
-            .text(mensagem)
-            .graphic(imageViewStatus) 
-            .position(Pos.BASELINE_RIGHT)  // Posição no canto inferior direito da tela
-            .hideAfter(Duration.seconds(5))  // Duração da notificação
-            .show();
-    }
-
+              .title(titulo)
+              .text(mensagem)
+              .graphic(imageViewStatus) 
+              .position(Pos.BASELINE_RIGHT)  // Posição no canto inferior direito da tela
+              .hideAfter(Duration.seconds(5))  // Duração da notificação
+              .show();
+         }
+     
 }
